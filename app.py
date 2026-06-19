@@ -1,10 +1,30 @@
 import streamlit as st
 import random
-import streamlit.components.v1 as components
-import json
+import pandas as pd
 
 # --- 1. 遊戲基礎設定 ---
 st.set_page_config(page_title="數字排序謎題", layout="centered")
+
+# --- 🎯 終極 CSS 微調：把表格完全偽裝成「極簡圓角數字卡片」並徹底去紅 🎯 ---
+st.markdown("""
+    <style>
+    /* 隱藏資料編輯器多餘的工具列和序號 */
+    [data-testid="stDataEditorToolbar"] { display: none !important; }
+    
+    /* 讓數字卡片外觀變大、變粗、圓角，呈現高質感的灰色，絕無紅色 */
+    .stDataEditor div, [data-testid="stDataEditor"] {
+        font-size: 22px !important;
+        font-weight: bold !important;
+        background-color: transparent !important;
+    }
+    
+    /* 微調間距，讓操作感更像在拉獨立卡片 */
+    .stDataFrame {
+        margin: 0 auto !important;
+        max-width: 600px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- 2. 核心狀態安全初始化 ---
 if "difficulty" not in st.session_state:
@@ -51,6 +71,7 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("🎮 動作操作")
     
+    # 按鈕 A：確定檢查答案
     if st.button("✅ 確定檢查答案", type="primary", use_container_width=True, disabled=st.session_state.game_over):
         current_order = list(st.session_state.player_sequence)
         correct_count = sum(1 for p, s in zip(current_order, st.session_state.secret_sequence) if p == s)
@@ -65,10 +86,12 @@ with st.sidebar:
             st.session_state.game_over = True
         st.rerun()
 
+    # 按鈕 B：揭曉神秘箱答案
     if st.button("👁️ 揭曉神秘箱答案", type="secondary", use_container_width=True):
         st.session_state.show_answer = True
         st.rerun()
         
+    # 防誤觸設計：隔離重開按鈕在最下方
     st.write("")
     st.write("")
     st.write("")
@@ -80,7 +103,7 @@ with st.sidebar:
 
 # --- 5. 主畫面主要邏輯區 ---
 st.title("🔢 數字排序謎題")
-st.write("請直接用滑鼠「左右拖曳」下方的數字卡片來調整順序，完成後點擊左側的檢查按鈕！")
+st.write("請直接用滑鼠「按住數字左側的 ⠿ 符號並上下拖曳」來調整數字順序，調整完點擊左側檢查答案！")
 st.markdown("---")
 
 # 【步驟 A】📦 神秘箱子區
@@ -96,91 +119,28 @@ else:
 
 st.markdown("---")
 
-# 【步驟 B】🖐️ 玩家操作區（HTML5 原生無損拖曳引擎，徹底除錯、去紅）
+# 【步驟 B】🖐️ 玩家操作區（100% 聽話的官方原生拖曳卡片引擎）
 st.subheader("🖐️ 玩家操作區")
-st.caption("👇 請直接用滑鼠點住數字「左右拖拉」調換順序：")
+st.caption("👇 用滑鼠按住數字左邊的 `⠿` 圖示即可直接「上下拖曳」調換位置，位置絕不亂跑：")
 
-# 準備傳遞給前端 JavaScript 的當前數字列表
-items_json = json.dumps(st.session_state.player_sequence)
+# 將當前陣列包裝成 Pandas DataFrame
+df = pd.DataFrame({"當前數字排列": st.session_state.player_sequence})
 
-# 嵌入高效能 HTML5 拖拽組件
-# 這段代碼自帶乾淨的極簡灰色卡片樣式，且絕對不重複、不走位
-html_code = f"""
-<div id="drag-container" style="display: flex; gap: 12px; padding: 10px 0; font-family: sans-serif; user-select: none;"></div>
+# 調用官方專門設計用來排序和編輯的原生資料組件
+# num_rows="fixed" 限制了行數，這意味著絕對不可能憑空多出、少掉或重複數字！
+edited_df = st.data_editor(
+    df,
+    use_container_width=True,
+    num_rows="fixed",
+    disabled=["當前數字排列"], # 禁用手動打字修改，只允許滑鼠拖拽排序
+    key=f"native_drag_engine_{len(st.session_state.history)}"
+)
 
-<script>
-// 從 Streamlit 獲取當前的純數字列表
-const items = {items_json};
-const container = document.getElementById('drag-container');
-
-// 動態渲染極簡數字卡片
-items.forEach((num, index) => {{
-    const el = document.createElement('div');
-    el.innerText = num;
-    el.draggable = true;
-    el.dataset.index = index;
-    
-    // 設定高質感、防紅色的極簡外觀
-    Object.assign(el.style, {{
-        backgroundColor: '#2b303c',
-        color: '#ffffff',
-        border: '1px solid #434956',
-        borderRadius: '8px',
-        padding: '14px 28px',
-        fontSize: '24px',
-        fontWeight: 'bold',
-        cursor: 'grab',
-        textAlign: 'center',
-        minWidth: '25px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-    }});
-    
-    // 監聽 HTML5 拖拽事件
-    el.addEventListener('dragstart', (e) => {{
-        e.dataTransfer.setData('text/plain', index);
-        el.style.opacity = '0.5';
-    }});
-    
-    el.addEventListener('dragend', () => {{
-        el.style.opacity = '1';
-    }});
-    
-    el.addEventListener('dragover', (e) => {{
-        e.preventDefault();
-    }});
-    
-    el.addEventListener('drop', (e) => {{
-        e.preventDefault();
-        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-        const toIndex = index;
-        
-        if (fromIndex !== toIndex) {{
-            // 在前端精準交換位置，絕對不會產生重複數字
-            const updatedItems = [...items];
-            const [movedItem] = updatedItems.splice(fromIndex, 1);
-            updatedItems.splice(toIndex, 0, movedItem);
-            
-            // 將完美排好的新陣列一次性安全回傳給 Python
-            window.parent.postMessage({{
-                type: 'streamlit:setComponentValue',
-                value: updatedItems
-            }}, '*');
-        }}
-    }});
-    
-    container.appendChild(el);
-}});
-</script>
-"""
-
-# 用於即時捕捉網頁端傳回來的最新正確排序資料
-# 利用 key 快取機制將變數完全隔離開來，防範任何異步走位錯誤
-response = components.html(html_code, height=90, key=f"html5_drag_engine_v1_{len(st.session_state.history)}")
-
-# 當前端傳回完美的新陣列時，覆寫系統序列
-if response is not None:
-    st.session_state.player_sequence = [str(x) for x in response]
-    st.rerun()
+# 當玩家完成拖曳，精確、100% 無損地寫回系統陣列
+if edited_df is not None:
+    new_order = edited_df["當前數字排列"].tolist()
+    if new_order != st.session_state.player_sequence:
+        st.session_state.player_sequence = new_order
 
 st.write("")
 st.write("")
