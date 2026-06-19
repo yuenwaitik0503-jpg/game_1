@@ -5,14 +5,14 @@ from streamlit_sortables import sort_items
 # --- 1. 遊戲基礎設定 ---
 st.set_page_config(page_title="數字卡片排序謎題", layout="centered")
 
-# --- 2. 初始化遊戲狀態 ---
+# --- 2. 初始化遊戲狀態（徹底移除所有顏色邏輯） ---
 if "secret_sequence" not in st.session_state:
-    st.session_state.difficulty = 4  # 預設 4 個數字
-    # 根據難度生成數字清單（例如 4 號難度就是 [1, 2, 3, 4]）
+    st.session_state.difficulty = 5  # 預設難度：5 個數字
+    # 建立純數字清單：['1', '2', '3', '4', '5']
     base_numbers = [str(i) for i in range(1, st.session_state.difficulty + 1)]
-    # 隨機打亂作為正確答案
+    # 隨機打亂作為神秘箱的正確答案
     st.session_state.secret_sequence = random.sample(base_numbers, st.session_state.difficulty)
-    # 玩家目前的排列順序（初始先打亂）
+    # 玩家当前的排列（初始先打亂）
     st.session_state.player_sequence = list(st.session_state.secret_sequence)
     random.shuffle(st.session_state.player_sequence)
     st.session_state.history = []
@@ -39,8 +39,6 @@ with st.sidebar:
         st.rerun()
         
     st.markdown("---")
-    
-    # 將確定檢查與揭曉答案按鈕移至左側
     st.subheader("🎮 動作操作")
     
     # 按鈕 A：確定檢查答案
@@ -65,7 +63,7 @@ with st.sidebar:
         st.session_state.show_answer = True
         st.rerun()
         
-    # ⭐ 防誤觸設計：利用大間隔與分隔線將重開按鈕徹底孤立在最下方
+    # 防誤觸設計：利用大間隔與分隔線將重開按鈕徹底孤立在最下方
     st.write("")
     st.write("")
     st.write("")
@@ -83,7 +81,7 @@ st.markdown("---")
 # 【步驟 A】📦 神秘箱子區
 st.subheader("📦 神秘箱子")
 if st.session_state.show_answer or st.session_state.game_over:
-    # 遊戲結束或揭曉答案時，用帶有質感的方框格式秀出正確的數字卡順序
+    # 顯示正確的純數字順序
     secret_display = " ".join([f"[{num}]" for num in st.session_state.secret_sequence])
     st.markdown(f"<h1 style='letter-spacing: 10px; text-align: center; color: #4CAF50;'>{secret_display}</h1>", unsafe_allow_html=True)
     if st.session_state.game_over:
@@ -95,41 +93,38 @@ else:
 
 st.markdown("---")
 
-# 【步驟 B】🖐️ 玩家操作區（數字卡片滑動引擎）
+# 【步驟 B】🖐️ 玩家操作區
 st.subheader("🖐️ 玩家操作區")
 st.caption("👇 請直接用滑鼠點住數字卡片「左右拖拉」來調換順序：")
 
-# 確保拖曳內容格式正確
-drag_items = [f" 卡片 {num} " for num in st.session_state.player_sequence]
+# 這裡丟進拖曳元件的字串，全部改成最純粹的 "數字" 字樣，清除任何歷史色彩代碼
+drag_items = [f"卡片 {num}" for num in st.session_state.player_sequence]
 
 # 呼叫橫向拖曳組件
-sorted_items = sort_items(drag_items, direction="horizontal", key=f"num_drag_v1_{len(st.session_state.history)}_{st.session_state.difficulty}")
+sorted_items = sort_items(drag_items, direction="horizontal", key=f"pure_num_drag_v2_{len(st.session_state.history)}_{st.session_state.difficulty}")
 
-# 只要玩家一拖曳，立刻即時更新最新順序
+# 當玩家拖曳時，精準過濾字串，只留下數字存回系統
 if sorted_items:
-    # 從 " 卡片 X " 中把純數字 X 提取出來
-    st.session_state.player_sequence = [item.replace(" 卡片 ", "").strip() for item in sorted_items]
+    st.session_state.player_sequence = [item.replace("卡片 ", "").strip() for item in sorted_items]
 
 st.write("")
 st.write("")
 st.markdown("---")
 
-# 【步驟 C】📊 歷史紀錄區（直接串接在操作區下方，完美對比）
+# 【步驟 C】📊 歷史紀錄區（直接在操作區下方，展示純數字卡片）
 st.subheader("📊 歷史比對紀錄")
 st.caption("您可以直接比對當前操作區的順序與先前各回合的分別：")
 
 if not st.session_state.history:
     st.info("尚未提交任何答案。在上方調整好數字卡順序後，點擊左側的「確定檢查答案」吧！")
 else:
-    # 用表格或清晰的列表由新到舊排下來
     for record in reversed(st.session_state.history):
-        # 將該回合歷史排列美化為卡片外觀
+        # 歷史紀錄也同步完全採用 [1] [2] [3] 這樣的純數字方框
         history_display = " ".join([f"[{num}]" for num in record["sequence"]])
         
-        # 計算不對的位置提示（選填，方便玩家看差距）
         st.markdown(f"""
         **第 {record["round"]} 回合**：  
-        <span style='font-size: 22px; letter-spacing: 5px; font-family: monospace; color: #2196F3;'>{history_display}</span>  
+        <span style='font-size: 22px; letter-spacing: 8px; font-family: monospace; color: #2196F3;'>{history_display}</span>  
         🎯 位置完全正確： `{record["correct"]}` / {st.session_state.difficulty} 個
         """, unsafe_allow_html=True)
         st.markdown("<div style='margin-bottom: 15px; border-bottom: 1px dashed #cccccc;'></div>", unsafe_allow_html=True)
