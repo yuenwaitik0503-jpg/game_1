@@ -3,16 +3,34 @@ import random
 from streamlit_sortables import sort_items
 
 # --- 1. 遊戲基礎設定 ---
-st.set_page_config(page_title="數字卡片排序謎題", layout="centered")
+st.set_page_config(page_title="數字排序謎題", layout="centered")
 
-# --- 2. 初始化遊戲狀態（徹底移除所有顏色邏輯） ---
+# --- 🎯 全局 CSS 控制：徹底拔除所有紅色，改成優雅的深灰色卡片 🎯 ---
+st.markdown("""
+    <style>
+    /* 強制將拖曳方塊的背景改成深灰色，文字改成白色，徹底蓋掉預設的紅色 */
+    div[data-sortable-id] div, 
+    .st-emotion-cache-1gh7w33, 
+    [class*="sortable-item"] {
+        background-color: #2b303c !important;
+        color: #ffffff !important;
+        border: 1px solid #434956 !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        font-size: 20px !important;
+        font-weight: bold !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 2. 初始化遊戲狀態 ---
 if "secret_sequence" not in st.session_state:
     st.session_state.difficulty = 5  # 預設難度：5 個數字
-    # 建立純數字清單：['1', '2', '3', '4', '5']
     base_numbers = [str(i) for i in range(1, st.session_state.difficulty + 1)]
     # 隨機打亂作為神秘箱的正確答案
     st.session_state.secret_sequence = random.sample(base_numbers, st.session_state.difficulty)
-    # 玩家当前的排列（初始先打亂）
+    # 玩家目前的排列（初始先打亂）
     st.session_state.player_sequence = list(st.session_state.secret_sequence)
     random.shuffle(st.session_state.player_sequence)
     st.session_state.history = []
@@ -33,7 +51,7 @@ def reset_game(difficulty_num):
 # --- 3. 左邊【遊戲設定區域】（側邊欄） ---
 with st.sidebar:
     st.header("⚙️ 遊戲設定")
-    new_diff = st.slider("選擇數字卡數量 (難度)", min_value=3, max_value=10, value=st.session_state.difficulty)
+    new_diff = st.slider("選擇數字數量 (難度)", min_value=3, max_value=10, value=st.session_state.difficulty)
     if new_diff != st.session_state.difficulty:
         reset_game(new_diff)
         st.rerun()
@@ -63,7 +81,7 @@ with st.sidebar:
         st.session_state.show_answer = True
         st.rerun()
         
-    # 防誤觸設計：利用大間隔與分隔線將重開按鈕徹底孤立在最下方
+    # 防誤觸設計：利用大間隔將重開按鈕隔離在最下方
     st.write("")
     st.write("")
     st.write("")
@@ -74,20 +92,18 @@ with st.sidebar:
         st.rerun()
 
 # --- 4. 主畫面主要邏輯區 ---
-st.title("🔢 數字卡片排序謎題")
-st.write("請在操作區直接用滑鼠左右拖拉數字卡片。調整完後，請使用左側設定區的「確定檢查答案」按鈕！")
+st.title("🔢 數字排序謎題")
+st.write("請在操作區直接用滑鼠左右拖拉數字。調整完後，請使用左側設定區的「確定檢查答案」按鈕！")
 st.markdown("---")
 
 # 【步驟 A】📦 神秘箱子區
 st.subheader("📦 神秘箱子")
 if st.session_state.show_answer or st.session_state.game_over:
-    # 顯示正確的純數字順序
     secret_display = " ".join([f"[{num}]" for num in st.session_state.secret_sequence])
     st.markdown(f"<h1 style='letter-spacing: 10px; text-align: center; color: #4CAF50;'>{secret_display}</h1>", unsafe_allow_html=True)
     if st.session_state.game_over:
         st.success(f"🎉 恭喜闖關成功！共花了 {len(st.session_state.history)} 回合！")
 else:
-    # 未揭曉時顯示鎖定狀態
     locks = " ".join(["🔒"] * st.session_state.difficulty)
     st.warning(f"內部數字順序已鎖定：{locks}")
 
@@ -95,31 +111,31 @@ st.markdown("---")
 
 # 【步驟 B】🖐️ 玩家操作區
 st.subheader("🖐️ 玩家操作區")
-st.caption("👇 請直接用滑鼠點住數字卡片「左右拖拉」來調換順序：")
+st.caption("👇 請直接用滑鼠點住數字「左右拖拉」來調換順序：")
 
-# 這裡丟進拖曳元件的字串，全部改成最純粹的 "數字" 字樣，清除任何歷史色彩代碼
-drag_items = [f"卡片 {num}" for num in st.session_state.player_sequence]
+# 丟進拖曳元件的字串，只有純數字
+drag_items = list(st.session_state.player_sequence)
 
 # 呼叫橫向拖曳組件
-sorted_items = sort_items(drag_items, direction="horizontal", key=f"pure_num_drag_v2_{len(st.session_state.history)}_{st.session_state.difficulty}")
+sorted_items = sort_items(drag_items, direction="horizontal", key=f"isolated_num_drag_{len(st.session_state.history)}_{st.session_state.difficulty}")
 
-# 當玩家拖曳時，精準過濾字串，只留下數字存回系統
+# 當玩家拖曳時，更新最新順序
 if sorted_items:
-    st.session_state.player_sequence = [item.replace("卡片 ", "").strip() for item in sorted_items]
+    st.session_state.player_sequence = [str(item).strip() for item in sorted_items]
 
 st.write("")
 st.write("")
 st.markdown("---")
 
-# 【步驟 C】📊 歷史紀錄區（直接在操作區下方，展示純數字卡片）
+# 【步驟 C】📊 歷史紀錄區（直接在操作區下方，展示純數字對比）
 st.subheader("📊 歷史比對紀錄")
 st.caption("您可以直接比對當前操作區的順序與先前各回合的分別：")
 
 if not st.session_state.history:
-    st.info("尚未提交任何答案。在上方調整好數字卡順序後，點擊左側的「確定檢查答案」吧！")
+    st.info("尚未提交任何答案。在上方調整好數字順序後，點擊左側的「確定檢查答案」吧！")
 else:
     for record in reversed(st.session_state.history):
-        # 歷史紀錄也同步完全採用 [1] [2] [3] 這樣的純數字方框
+        # 歷史紀錄採用 [1] [2] [3] 的純數字外觀
         history_display = " ".join([f"[{num}]" for num in record["sequence"]])
         
         st.markdown(f"""
