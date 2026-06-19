@@ -1,32 +1,25 @@
 import streamlit as st
 import random
+from streamlit_drag_drop_sortable import drag_drop_sortable
 
 # --- 1. 遊戲基礎設定 ---
 st.set_page_config(page_title="數字排序謎題", layout="centered")
 
 # --- 2. 核心狀態安全初始化 ---
-if "difficulty" not in st.session_state:
-    st.session_state.difficulty = 5
-
 if "secret_sequence" not in st.session_state:
+    st.session_state.difficulty = 5  # 預設難度
     base_numbers = [str(i) for i in range(1, st.session_state.difficulty + 1)]
+    # 隨機答案
     st.session_state.secret_sequence = random.sample(base_numbers, st.session_state.difficulty)
-
-if "player_sequence" not in st.session_state:
+    # 玩家當前排列
     st.session_state.player_sequence = list(st.session_state.secret_sequence)
     random.shuffle(st.session_state.player_sequence)
-
-if "history" not in st.session_state:
+    
     st.session_state.history = []
-
-if "show_answer" not in st.session_state:
     st.session_state.show_answer = False
-
-if "game_over" not in st.session_state:
     st.session_state.game_over = False
 
-
-# --- 3. 重置遊戲安全函數 ---
+# 重置遊戲安全函數
 def reset_game(difficulty_num):
     st.session_state.difficulty = difficulty_num
     base_numbers = [str(i) for i in range(1, difficulty_num + 1)]
@@ -37,8 +30,7 @@ def reset_game(difficulty_num):
     st.session_state.show_answer = False
     st.session_state.game_over = False
 
-
-# --- 4. 左邊【遊戲設定區域】（側邊欄） ---
+# --- 3. 左邊【遊戲設定區域】（側邊欄） ---
 with st.sidebar:
     st.header("⚙️ 遊戲設定")
     new_diff = st.slider("選擇數字數量 (難度)", min_value=3, max_value=10, value=st.session_state.difficulty)
@@ -69,7 +61,7 @@ with st.sidebar:
         st.session_state.show_answer = True
         st.rerun()
         
-    # 防誤觸設計：隔離重開按鈕在最下方
+    # 防誤觸設計：利用大間隔將重開按鈕隔離在最下方
     st.write("")
     st.write("")
     st.write("")
@@ -79,9 +71,9 @@ with st.sidebar:
         reset_game(st.session_state.difficulty)
         st.rerun()
 
-# --- 5. 主畫面主要邏輯區 ---
+# --- 4. 主畫面主要邏輯區 ---
 st.title("🔢 數字排序謎題")
-st.write("利用下方的操作區滑桿，直接左右拉動來調整當前數字的排列順序！")
+st.write("請直接用滑鼠「按住並左右拖曳」下方的數字卡片來調整順序，完成後點擊左側的檢查按鈕！")
 st.markdown("---")
 
 # 【步驟 A】📦 神秘箱子區
@@ -93,46 +85,42 @@ if st.session_state.show_answer or st.session_state.game_over:
         st.success(f"🎉 恭喜闖關成功！共花了 {len(st.session_state.history)} 回合！")
 else:
     locks = " ".join(["🔒"] * st.session_state.difficulty)
-    st.warning(f"內部數字順序已鎖定：{locks}")
+    st.warning(f"內部數字順序已鎖定：{locks} （請在下方排列完成後檢查）")
 
 st.markdown("---")
 
-# 【步驟 B】🖐️ 玩家操作區（純內建原生，絕無紅色、最聽話的滑動排序）
+# 【步驟 B】🖐️ 玩家操作區（重新迎回最流暢的原生拖曳引擎）
 st.subheader("🖐️ 玩家操作區")
-st.caption("🔍 當前順序如下，只有最純粹的獨立數字：")
+st.caption("🔍 當前排列如下，請用滑鼠按住數字卡片直接進行拖曳：")
 
-# 1. 用超大字體、極簡美觀地呈現當前玩家排出來的獨立數字
-current_display = " ".join([f"({num})" for num in st.session_state.player_sequence])
-st.markdown(f"<h2 style='text-align: center; color: #2196F3; letter-spacing: 15px;'>{current_display}</h2>", unsafe_allow_html=True)
+# 視覺保護 CSS：確保拖曳元件長得乾淨大氣
+st.markdown("""
+    <style>
+    /* 調整元件樣式，確保只有純數字與乾淨的主題灰色背景，絕無紅色跑版 */
+    div[data-sortable-id] div, div[data-sortable-id] li {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    div[data-sortable-id] li button {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-st.write("")
-st.caption("👇 拉動各個位置的滑桿，即可自由調整該位置要擺放哪個數字：")
+# 這裡塞入的全部都是純數字，不帶任何英文或代碼
+drag_items = [f" {num} " for num in st.session_state.player_sequence]
 
-# 2. 為每個位置生成一個專屬的數字調整滑桿，左右拉動超流暢
-cols = st.columns(st.session_state.difficulty)
-new_sequence = list(st.session_state.player_sequence)
+# 調用最乾淨、最穩定的橫向拖曳排序元件
+sorted_items = drag_drop_sortable(
+    items=drag_items,
+    direction="horizontal",
+    key=f"drag_sort_v3_{len(st.session_state.history)}_{st.session_state.difficulty}"
+)
 
-for idx in range(st.session_state.difficulty):
-    with cols[idx]:
-        st.markdown(f"<p style='text-align: center; margin-bottom: -10px;'>第 {idx+1} 位</p>", unsafe_allow_html=True)
-        # 取得目前這個位置的數字
-        current_val = st.session_state.player_sequence[idx]
-        
-        # 滑桿選項：可選範圍就是 1 ~ 難度上限的數字
-        # 拉動滑桿，數字順序立刻聽話改變
-        selected_num = st.select_slider(
-            label=f"slider_{idx}",
-            options=[str(i) for i in range(1, st.session_state.difficulty + 1)],
-            value=current_val,
-            label_visibility="collapsed",
-            key=f"pos_slider_{idx}_r{len(st.session_state.history)}"
-        )
-        new_sequence[idx] = selected_num
-
-# 只要玩家拉動任何一個滑桿，立刻更新排列
-if new_sequence != st.session_state.player_sequence:
-    st.session_state.player_sequence = new_sequence
-    st.rerun()
+# 當玩家完成拖曳，即時更新最新數字序列
+if sorted_items:
+    st.session_state.player_sequence = [item.replace(" ", "").strip() for item in sorted_items]
 
 st.write("")
 st.write("")
@@ -150,7 +138,7 @@ else:
         
         st.markdown(f"""
         **第 {record["round"]} 回合**：  
-        <span style='font-size: 22px; letter-spacing: 8px; font-family: monospace; color: #9E9E9E;'>{history_display}</span>  
+        <span style='font-size: 22px; letter-spacing: 8px; font-family: monospace; color: #2196F3;'>{history_display}</span>  
         🎯 位置完全正確： `{record["correct"]}` / {st.session_state.difficulty} 個
         """, unsafe_allow_html=True)
         st.markdown("<div style='margin-bottom: 15px; border-bottom: 1px dashed #cccccc;'></div>", unsafe_allow_html=True)
