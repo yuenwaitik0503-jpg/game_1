@@ -1,46 +1,20 @@
 import streamlit as st
 import random
-from streamlit_sortables import sort_items
+import streamlit.components.v1 as components
+import json
 
 # --- 1. 遊戲基礎設定 ---
 st.set_page_config(page_title="數字排序謎題", layout="centered")
 
-# --- 🎯 終極 CSS 強制覆蓋：徹底拔除這個套件的預設紅色，改成內建主題灰色 🎯 ---
-st.markdown("""
-    <style>
-    /* 強制將拖曳方塊的預設紅色背景改成優雅的深灰色，並去除任何殘留顏色 */
-    div[data-sortable-id] div, 
-    .st-emotion-cache-1gh7w33, 
-    [class*="sortable-item"] {
-        background-color: #2b303c !important;
-        background: #2b303c !important;
-        color: #ffffff !important;
-        border: 1px solid #434956 !important;
-        border-radius: 8px !important;
-        padding: 12px 24px !important;
-        font-size: 24px !important;
-        font-weight: bold !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- 2. 核心狀態安全初始化（徹底阻絕舊版 HTML 顏色資料的快取殘留） ---
+# --- 2. 核心狀態安全初始化 ---
 if "difficulty" not in st.session_state:
     st.session_state.difficulty = 5
-
-# 如果發現舊資料裡帶有 HTML 標籤（例如含有 <div ），一律強制重置清空
-if "player_sequence" in st.session_state and any("<div" in str(x) for x in st.session_state.player_sequence):
-    del st.session_state["secret_sequence"]
-    del st.session_state["player_sequence"]
-    del st.session_state["history"]
 
 if "secret_sequence" not in st.session_state:
     base_numbers = [str(i) for i in range(1, st.session_state.difficulty + 1)]
     st.session_state.secret_sequence = random.sample(base_numbers, st.session_state.difficulty)
 
 if "player_sequence" not in st.session_state:
-    # 這裡確保只有最純粹、乾淨的 ['1', '2', '3'...] 獨立數字字串
     st.session_state.player_sequence = list(st.session_state.secret_sequence)
     random.shuffle(st.session_state.player_sequence)
 
@@ -77,7 +51,6 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("🎮 動作操作")
     
-    # 按鈕 A：確定檢查答案
     if st.button("✅ 確定檢查答案", type="primary", use_container_width=True, disabled=st.session_state.game_over):
         current_order = list(st.session_state.player_sequence)
         correct_count = sum(1 for p, s in zip(current_order, st.session_state.secret_sequence) if p == s)
@@ -92,12 +65,10 @@ with st.sidebar:
             st.session_state.game_over = True
         st.rerun()
 
-    # 按鈕 B：揭曉神秘箱答案
     if st.button("👁️ 揭曉神秘箱答案", type="secondary", use_container_width=True):
         st.session_state.show_answer = True
         st.rerun()
         
-    # 防誤觸設計：利用大間隔將重開按鈕徹底隔離在最下方
     st.write("")
     st.write("")
     st.write("")
@@ -109,7 +80,7 @@ with st.sidebar:
 
 # --- 5. 主畫面主要邏輯區 ---
 st.title("🔢 數字排序謎題")
-st.write("請直接用滑鼠「左右拖曳」下方的數字卡片。調整完後，請使用左側設定區的按鈕檢查答案！")
+st.write("請直接用滑鼠「左右拖曳」下方的數字卡片來調整順序，完成後點擊左側的檢查按鈕！")
 st.markdown("---")
 
 # 【步驟 A】📦 神秘箱子區
@@ -125,29 +96,97 @@ else:
 
 st.markdown("---")
 
-# 【步驟 B】🖐️ 玩家操作區（滑鼠左右拖曳排序）
+# 【步驟 B】🖐️ 玩家操作區（HTML5 原生無損拖曳引擎，徹底除錯、去紅）
 st.subheader("🖐️ 玩家操作區")
 st.caption("👇 請直接用滑鼠點住數字「左右拖拉」調換順序：")
 
-# 這裡丟進去元件的只有最乾淨的 ['1', '2', '3'...]
-drag_items = list(st.session_state.player_sequence)
+# 準備傳遞給前端 JavaScript 的當前數字列表
+items_json = json.dumps(st.session_state.player_sequence)
 
-# 呼叫你原本就有安裝的橫向拖曳組件，並加上動態 Key 確保每次提交能精準刷新狀態
-sorted_items = sort_items(
-    drag_items, 
-    direction="horizontal", 
-    key=f"clean_drag_v9_{len(st.session_state.history)}_{st.session_state.difficulty}"
-)
+# 嵌入高效能 HTML5 拖拽組件
+# 這段代碼自帶乾淨的極簡灰色卡片樣式，且絕對不重複、不走位
+html_code = f"""
+<div id="drag-container" style="display: flex; gap: 12px; padding: 10px 0; font-family: sans-serif; user-select: none;"></div>
 
-# 當玩家完成拖曳，即時更新最新數字序列
-if sorted_items:
-    st.session_state.player_sequence = [str(item).strip() for item in sorted_items]
+<script>
+// 從 Streamlit 獲取當前的純數字列表
+const items = {items_json};
+const container = document.getElementById('drag-container');
+
+// 動態渲染極簡數字卡片
+items.forEach((num, index) => {{
+    const el = document.createElement('div');
+    el.innerText = num;
+    el.draggable = true;
+    el.dataset.index = index;
+    
+    // 設定高質感、防紅色的極簡外觀
+    Object.assign(el.style, {{
+        backgroundColor: '#2b303c',
+        color: '#ffffff',
+        border: '1px solid #434956',
+        borderRadius: '8px',
+        padding: '14px 28px',
+        fontSize: '24px',
+        fontWeight: 'bold',
+        cursor: 'grab',
+        textAlign: 'center',
+        minWidth: '25px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+    }});
+    
+    // 監聽 HTML5 拖拽事件
+    el.addEventListener('dragstart', (e) => {{
+        e.dataTransfer.setData('text/plain', index);
+        el.style.opacity = '0.5';
+    }});
+    
+    el.addEventListener('dragend', () => {{
+        el.style.opacity = '1';
+    }});
+    
+    el.addEventListener('dragover', (e) => {{
+        e.preventDefault();
+    }});
+    
+    el.addEventListener('drop', (e) => {{
+        e.preventDefault();
+        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+        const toIndex = index;
+        
+        if (fromIndex !== toIndex) {{
+            // 在前端精準交換位置，絕對不會產生重複數字
+            const updatedItems = [...items];
+            const [movedItem] = updatedItems.splice(fromIndex, 1);
+            updatedItems.splice(toIndex, 0, movedItem);
+            
+            // 將完美排好的新陣列一次性安全回傳給 Python
+            window.parent.postMessage({{
+                type: 'streamlit:setComponentValue',
+                value: updatedItems
+            }}, '*');
+        }}
+    }});
+    
+    container.appendChild(el);
+}});
+</script>
+"""
+
+# 用於即時捕捉網頁端傳回來的最新正確排序資料
+# 利用 key 快取機制將變數完全隔離開來，防範任何異步走位錯誤
+response = components.html(html_code, height=90, key=f"html5_drag_engine_v1_{len(st.session_state.history)}")
+
+# 當前端傳回完美的新陣列時，覆寫系統序列
+if response is not None:
+    st.session_state.player_sequence = [str(x) for x in response]
+    st.rerun()
 
 st.write("")
 st.write("")
 st.markdown("---")
 
-# 【步驟 C】📊 歷史紀錄區（直接在操作區下方，展示純數字對比）
+# 【步驟 C】📊 歷史紀錄區
 st.subheader("📊 歷史比對紀錄")
 st.caption("您可以直接比對當前操作區的順序與先前各回合的分別：")
 
@@ -155,7 +194,6 @@ if not st.session_state.history:
     st.info("尚未提交任何答案。在上方調整好數字順序後，點擊左側的「確定檢查答案」吧！")
 else:
     for record in reversed(st.session_state.history):
-        # 歷史紀錄採用 [1] [2] [3] 的純數字方框外觀
         history_display = " ".join([f"[{num}]" for num in record["sequence"]])
         
         st.markdown(f"""
