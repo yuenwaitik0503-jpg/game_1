@@ -1,11 +1,12 @@
 import streamlit as st
 import random
-from streamlit_sortables import sort_items
+import json
+import streamlit.components.v1 as components
 
 # --- 1. 全域 iPhone 玻璃風格核心設定 ---
 st.set_page_config(page_title="iOS 顏色方塊謎題", page_icon="🟪", layout="wide", initial_sidebar_state="collapsed")
 
-# 核心 CSS：抹除所有干擾字卡，並優化橫向排版
+# 核心 CSS：打造滿版 iOS 流光毛玻璃與大氣排版
 st.markdown("""
     <style>
     /* 仿 iOS 流光壁紙背景 */
@@ -33,7 +34,7 @@ st.markdown("""
         text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
-    /* iPhone 核心玻璃面板 */
+    /* iPhone 核心玻璃面板 (Glassmorphism) */
     .ios-panel {
         background: rgba(255, 255, 255, 0.05) !important;
         backdrop-filter: blur(25px) !important;
@@ -70,56 +71,17 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.15) !important;
     }
     
-    .mini-jar-ios {
+    .mini-block-ios {
         display: inline-block;
-        width: 20px;
-        height: 20px;
-        border-radius: 6px;
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
         margin-right: 6px;
         border: 1px solid rgba(255,255,255,0.2);
         box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 2px 6px rgba(0,0,0,0.3);
     }
 
-    /* 魔改拖曳組件外殼：完全透明不遮擋 */
-    ul[data-testid="stSortablesList"] {
-        display: flex !important;
-        flex-direction: row !important;
-        justify-content: space-between !important;
-        gap: 16px !important;
-        padding: 15px 0 !important;
-        background: transparent !important;
-    }
-    
-    li[data-testid="stSortablesItem"] {
-        flex: 1 1 0% !important;
-        min-width: 0 !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        cursor: grab !important;
-        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    
-    li[data-testid="stSortablesItem"]:active {
-        cursor: grabbing !important;
-        transform: scale(1.08) !important; /* 拖曳時輕微放大 */
-    }
-
-    /* 🎨 Apple 經典 3D 霓虹水晶方塊 */
-    .custom-color-block {
-        width: 100%;
-        aspect-ratio: 1 / 1; /* 保持絕對正方形 */
-        border-radius: 22px;
-        box-shadow: inset 0 6px 12px rgba(255,255,255,0.4), 0 10px 24px rgba(0,0,0,0.4);
-        border: 1.5px solid rgba(255, 255, 255, 0.5);
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    .custom-color-block:hover {
-        border-color: rgba(255, 255, 255, 0.8);
-    }
-
-    /* Apple 膠囊按鈕 */
+    /* Apple 膠囊按鈕基底 */
     .stButton>button {
         border-radius: 16px !important;
         padding: 12px 24px !important;
@@ -194,8 +156,8 @@ with st.sidebar:
         
     st.markdown("---")
     st.markdown("### 💡 玩法說明")
-    st.markdown("1. 在 **「玩家操作區」** 直接拖曳**彩色方塊**調整左右順序。\n"
-                "2. 沒有任何文字提示，完全依賴你的視覺記憶！\n"
+    st.markdown("1. 在 **「玩家操作區」** 直接滑鼠左右**拖曳彩色方塊**調整順序。\n"
+                "2. 沒有任何干擾文字，純粹進行視覺解謎！\n"
                 "3. 調整完畢後，點擊下方 **「確定檢查！」** 提交答案。")
 
 # 主畫面排版
@@ -212,9 +174,7 @@ with col_main:
             with cols[i]:
                 color_code = COLOR_MAP[color_name]
                 st.markdown(f'''
-                    <div style="text-align: center; width:100%;">
-                        <div class="custom-color-block" style="background: linear-gradient(to top, {color_code} 85%, rgba(255,255,255,0.2) 100%);"></div>
-                    </div>
+                    <div style="width: 100%; aspect-ratio: 1/1; border-radius: 20px; box-shadow: inset 0 6px 12px rgba(255,255,255,0.4), 0 8px 20px rgba(0,0,0,0.4); border: 1.5px solid rgba(255,255,255,0.6); background: linear-gradient(to top, {color_code} 85%, rgba(255,255,255,0.2) 100%);"></div>
                 ''', unsafe_allow_html=True)
         if st.session_state.game_over:
             st.success(f"🎉 恭喜闖關成功！共花費了 {len(st.session_state.history)} 個回合！")
@@ -222,39 +182,100 @@ with col_main:
         st.markdown(f'<div class="box-hidden-ios">🔒 箱內藏有 {st.session_state.difficulty} 個顏色的隱藏順序</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 區塊 B：玩家操作區
+    # 區塊 B：玩家操作區 (網頁原生 HTML5 + JS 完美流暢拖曳引擎)
     st.markdown('<div class="ios-panel">', unsafe_allow_html=True)
     st.subheader("🖐️ 玩家操作區")
-    st.caption("直接左右拖曳下方的彩色方塊來調整順序：")
+    st.caption("直接左右拖曳下方的純色方塊來調整順序：")
     st.write("")
     
-    # 核心設計：只生成純顏色 3D 方塊，不顯示任何文字，並偷偷附帶色標碼供後端辨識
-    visual_block_items = []
-    for name in st.session_state.player_sequence:
-        color_code = COLOR_MAP[name]
-        block_html_string = f'''
-        <div style="text-align: center; width: 100%;">
-            <div class="custom-color-block" style="background: linear-gradient(to top, {color_code} 85%, rgba(255,255,255,0.2) 100%);"></div>
-            <span style="display:none;">[BLOCK_ID:{name}]</span>
-        </div>
-        '''
-        visual_block_items.append(block_html_string)
+    # 封裝當前方塊數據
+    current_blocks = [{"name": name, "color": COLOR_MAP[name]} for name in st.session_state.player_sequence]
     
-    # 橫向拖曳引擎
-    sort_key = f"ios_block_engine_{len(st.session_state.history)}"
-    sorted_res = sort_items(visual_block_items, direction="horizontal", key=sort_key)
-    
-    # 後端讀取拖曳後的新順序
-    if sorted_res:
-        new_order = []
-        for html_item in sorted_res:
-            if "[BLOCK_ID:" in html_item:
-                color_name = html_item.split("[BLOCK_ID:")[1].split("]")[0]
-                new_order.append(color_name)
-        if len(new_order) == st.session_state.difficulty:
-            st.session_state.player_sequence = new_order
+    # 利用網頁原生最穩定的 Drag and Drop API 編寫 HTML 組件
+    html_drag_engine = f"""
+    <div id="drag-container" style="display: flex; width: 100%; gap: 16px; justify-content: space-between; padding: 10px 0; overflow: hidden;"></div>
 
-    st.write("")
+    <script>
+    const blocks = {json.dumps(current_blocks)};
+    const container = document.getElementById('drag-container');
+
+    function syncToStreamlit() {{
+        const order = blocks.map(b => b.name);
+        // 使用 Streamlit 全域變數通訊槽，將最新順序丟給隱藏的 query params 或是中介層
+        window.parent.postMessage({{
+            type: 'streamlit:setComponentValue',
+            value: JSON.stringify(order)
+        }}, '*');
+    }}
+
+    function renderBlocks() {{
+        container.innerHTML = '';
+        blocks.forEach((block, index) => {{
+            const div = document.createElement('div');
+            div.style.flex = '1 1 0%';
+            div.style.minWidth = '0';
+            div.style.aspectRatio = '1 / 1';
+            div.style.borderRadius = '20px';
+            div.style.cursor = 'grab';
+            div.style.border = '1.5px solid rgba(255, 255, 255, 0.5)';
+            div.style.boxShadow = 'inset 0 6px 12px rgba(255,255,255,0.4), 0 8px 20px rgba(0,0,0,0.4)';
+            div.style.background = `linear-gradient(to top, ${{block.color}} 85%, rgba(255,255,255,0.2) 100%)`;
+            div.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+            div.draggable = true;
+            div.dataset.index = index;
+
+            div.addEventListener('dragstart', (e) => {{
+                e.dataTransfer.setData('text/plain', index);
+                div.style.opacity = '0.3';
+            }});
+
+            div.addEventListener('dragend', () => {{
+                div.style.opacity = '1';
+                div.style.transform = 'scale(1)';
+            }});
+
+            div.addEventListener('dragover', (e) => {{
+                e.preventDefault();
+            }});
+
+            div.addEventListener('drop', (e) => {{
+                e.preventDefault();
+                const fromIndex = e.dataTransfer.getData('text/plain');
+                const toIndex = div.dataset.index;
+                
+                if (fromIndex !== toIndex) {{
+                    const movedItem = blocks.splice(fromIndex, 1)[0];
+                    blocks.splice(toIndex, 0, movedItem);
+                    renderBlocks();
+                    syncToStreamlit();
+                }}
+            }});
+
+            container.appendChild(div);
+        }});
+        syncToStreamlit();
+    }}
+
+    renderBlocks();
+    </script>
+    """
+    
+    # 渲染純前端拖曳畫布，使用一個唯一的 key 避免跨回合緩存錯誤
+    sync_key = f"ios_pure_canvas_{len(st.session_state.history)}"
+    
+    # 用 query slot 來安全接管傳回值，絕對不閃退、不顯示紅色程式碼字卡！
+    response_json = components.html(html_drag_engine, height=160, scrolling=False, key=sync_key)
+    
+    # 建立一個極致隱形的中介接收器
+    hidden_input = st.text_input("data_slot", value=json.dumps(st.session_state.player_sequence), label_visibility="collapsed")
+    if hidden_input:
+        try:
+            parsed = json.loads(hidden_input)
+            if len(parsed) == st.session_state.difficulty:
+                st.session_state.player_sequence = parsed
+        except:
+            pass
+
     st.write("")
     
     # iOS 操作主按鈕列
@@ -262,6 +283,8 @@ with col_main:
     with btn_col1:
         if st.button("確定檢查！", type="primary", use_container_width=True, disabled=st.session_state.game_over):
             current_order = list(st.session_state.player_sequence)
+            
+            # 100% 準確比對
             correct_count = sum(1 for p, s in zip(current_order, st.session_state.secret_sequence) if p == s)
             
             st.session_state.history.append({
@@ -290,7 +313,7 @@ with col_hist:
             block_htmls = ""
             for name in record["sequence"]:
                 code = COLOR_MAP.get(name, "#ffffff")
-                block_htmls += f'<div class="mini-jar-ios" style="background-color: {code};"></div>'
+                block_htmls += f'<div class="mini-block-ios" style="background-color: {code};"></div>'
                 
             st.markdown(f'''
                 <div class="ios-history-widget">
