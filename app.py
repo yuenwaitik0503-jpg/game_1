@@ -5,7 +5,7 @@ from streamlit_sortables import sort_items
 # --- 1. 遊戲基礎設定 ---
 st.set_page_config(page_title="顏色方塊排序謎題", layout="centered")
 
-# --- 2. 顏色資料庫（使用最純粹的 Emoji 方塊作為唯一 Key） ---
+# --- 2. 顏色資料庫（擴充至 10 種純粹的 Emoji 符號，確保 10 階難度不會不夠抽） ---
 COLOR_MAP = {
     "🟥": "紅色",
     "🟩": "綠色",
@@ -14,17 +14,19 @@ COLOR_MAP = {
     "🟧": "橘色",
     "🟨": "黃色",
     "🟫": "棕色",
-    "⬛": "黑色"
+    "⬛": "黑色",
+    "⚪": "白色",
+    "🔵": "藍色圓形"
 }
-# 取出所有的純顏色方塊符號
+# 取出所有的純顏色符號清單（共 10 個）
 COLOR_LIST = list(COLOR_MAP.keys())
 
 # --- 3. 初始化遊戲狀態 ---
 if "secret_sequence" not in st.session_state:
     st.session_state.difficulty = 4  # 預設 4 個方塊
-    # 隨機抽取正確答案（純方塊符號清單，例如 ['🟥', '🟩', '🟦', '🟪']）
+    # 隨機抽取正確答案
     st.session_state.secret_sequence = random.sample(COLOR_LIST, st.session_state.difficulty)
-    # 玩家目前的排列順序（初始先複製一份正確答案，再打亂給玩家排）
+    # 玩家目前的排列順序（初始先打亂）
     st.session_state.player_sequence = list(st.session_state.secret_sequence)
     random.shuffle(st.session_state.player_sequence)
     st.session_state.history = []
@@ -44,7 +46,8 @@ def reset_game(difficulty_num):
 # --- 4. 側邊欄控制 ---
 with st.sidebar:
     st.header("⚙️ 遊戲設定")
-    new_diff = st.slider("選擇方塊數量 (難度)", min_value=3, max_value=6, value=st.session_state.difficulty)
+    # ⭐ 核心改動：將 max_value 從 6 改為 10
+    new_diff = st.slider("選擇方塊數量 (難度)", min_value=3, max_value=10, value=st.session_state.difficulty)
     if new_diff != st.session_state.difficulty:
         reset_game(new_diff)
         st.rerun()
@@ -124,7 +127,7 @@ st.markdown("---")
 # 【步驟 D】📊 歷史比對紀錄區
 st.subheader("📊 歷史比對紀錄")
 if not st.session_state.history:
-    st.info("尚未提交任何答案，開始拖動方塊吧！")
+    st.info("尚未提交 any 答案，開始拖動方塊吧！")
 else:
     for record in reversed(st.session_state.history):
         emoji_line = " ".join(record["sequence"])
