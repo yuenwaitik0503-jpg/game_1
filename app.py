@@ -1,12 +1,10 @@
 import streamlit as st
 import random
-import json
-import streamlit.components.v1 as components
 
 # --- 1. 全域 iPhone 玻璃風格核心設定 ---
 st.set_page_config(page_title="iOS 顏色方塊謎題", page_icon="🟪", layout="wide", initial_sidebar_state="collapsed")
 
-# 核心 CSS：打造滿版 iOS 流光毛玻璃與大氣排版
+# 核心 CSS：將原生按鈕魔改成 3D 霓虹水晶正方形方塊
 st.markdown("""
     <style>
     /* 仿 iOS 流光壁紙背景 */
@@ -34,7 +32,7 @@ st.markdown("""
         text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
-    /* iPhone 核心玻璃面板 (Glassmorphism) */
+    /* iPhone 核心玻璃面板 */
     .ios-panel {
         background: rgba(255, 255, 255, 0.05) !important;
         backdrop-filter: blur(25px) !important;
@@ -73,33 +71,54 @@ st.markdown("""
     
     .mini-block-ios {
         display: inline-block;
-        width: 18px;
-        height: 18px;
-        border-radius: 5px;
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
         margin-right: 6px;
         border: 1px solid rgba(255,255,255,0.2);
         box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 2px 6px rgba(0,0,0,0.3);
     }
 
-    /* Apple 膠囊按鈕基底 */
-    .stButton>button {
+    /* 🎨 核心魔法：將操作區的 st.button 變成百分之百完美的正方形 3D 水晶色塊 */
+    div[data-testid="stHorizontalBlock"] button {
+        width: 100% !important;
+        aspect-ratio: 1 / 1 !important; /* 確保絕對正方形 */
+        border-radius: 22px !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+        box-shadow: inset 0 6px 12px rgba(255,255,255,0.3), 0 8px 20px rgba(0,0,0,0.4) !important;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s !important;
+        padding: 0 !important;
+    }
+    
+    div[data-testid="stHorizontalBlock"] button:hover {
+        border-color: rgba(255, 255, 255, 0.8) !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    div[data-testid="stHorizontalBlock"] button:active {
+        transform: scale(0.95) !important;
+    }}
+
+    /* 底層全域控制按鈕 */
+    .stButton>button[kind="primary"] {
         border-radius: 16px !important;
         padding: 12px 24px !important;
         font-weight: 600 !important;
         font-size: 15px !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
-    }
-    .stButton>button[kind="primary"] {
         background: linear-gradient(135deg, #007aff 0%, #0056b3 100%) !important;
         color: white !important;
         border: none !important;
         box-shadow: 0 4px 12px rgba(0,122,255,0.3) !important;
     }
+    
     .stButton>button[kind="secondary"] {
+        border-radius: 16px !important;
+        padding: 12px 24px !important;
+        font-weight: 600 !important;
+        font-size: 15px !important;
         background: rgba(255, 255, 255, 0.08) !important;
         color: #f1f5f9 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
     }
     
     /* 側邊欄抽屜 */
@@ -128,6 +147,7 @@ if "secret_sequence" not in st.session_state:
     st.session_state.history = []
     st.session_state.show_answer = False
     st.session_state.game_over = False
+    st.session_state.selected_idx = None  # 用來記錄目前選中的方塊索引
 
 def reset_game(difficulty_num):
     st.session_state.difficulty = difficulty_num
@@ -136,6 +156,7 @@ def reset_game(difficulty_num):
     st.session_state.history = []
     st.session_state.show_answer = False
     st.session_state.game_over = False
+    st.session_state.selected_idx = None
 
 # --- 4. UI 畫面渲染 ---
 st.title("🧪 顏色方塊謎題")
@@ -156,9 +177,10 @@ with st.sidebar:
         
     st.markdown("---")
     st.markdown("### 💡 玩法說明")
-    st.markdown("1. 在 **「玩家操作區」** 直接滑鼠左右**拖曳彩色方塊**調整順序。\n"
-                "2. 沒有任何干擾文字，純粹進行視覺解謎！\n"
-                "3. 調整完畢後，點擊下方 **「確定檢查！」** 提交答案。")
+    st.markdown("1. 點擊任何一個**彩色方塊**選定它，方塊邊框會亮起高光。\n"
+                "2. 再點擊**另一個方塊**，這兩個方塊的位置就會**精準對調**！\n"
+                "3. 畫面上完全沒有任何擾人的文字，純粹進行視覺解謎。\n"
+                "4. 排好後，點擊下方 **「確定檢查！」** 提交答案。")
 
 # 主畫面排版
 col_main, col_hist = st.columns([78, 22])
@@ -174,108 +196,62 @@ with col_main:
             with cols[i]:
                 color_code = COLOR_MAP[color_name]
                 st.markdown(f'''
-                    <div style="width: 100%; aspect-ratio: 1/1; border-radius: 20px; box-shadow: inset 0 6px 12px rgba(255,255,255,0.4), 0 8px 20px rgba(0,0,0,0.4); border: 1.5px solid rgba(255,255,255,0.6); background: linear-gradient(to top, {color_code} 85%, rgba(255,255,255,0.2) 100%);"></div>
+                    <div style="width: 100%; aspect-ratio: 1/1; border-radius: 22px; box-shadow: inset 0 6px 12px rgba(255,255,255,0.4), 0 8px 20px rgba(0,0,0,0.4); border: 1.5px solid rgba(255,255,255,0.6); background: linear-gradient(to top, {color_code} 85%, rgba(255,255,255,0.2) 100%);"></div>
                 ''', unsafe_allow_html=True)
         if st.session_state.game_over:
             st.success(f"🎉 恭喜闖關成功！共花費了 {len(st.session_state.history)} 個回合！")
     else:
-        st.markdown(f'<div class="box-hidden-ios">🔒 箱內藏有 {st.session_state.difficulty} 個顏色的隱藏順序</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="box-hidden-ios">🔒 箱內藏有 {st.session_state.difficulty} 個方塊的隱藏順序</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 區塊 B：玩家操作區 (網頁原生 HTML5 + JS 完美流暢拖曳引擎)
+    # 區塊 B：玩家操作區（點擊對調核心，完美避開 JS/HTML 渲染 Bug）
     st.markdown('<div class="ios-panel">', unsafe_allow_html=True)
     st.subheader("🖐️ 玩家操作區")
-    st.caption("直接左右拖曳下方的純色方塊來調整順序：")
+    st.caption("依序點擊任意兩個方塊即可將它們的位置對調：")
     st.write("")
     
-    # 封裝當前方塊數據
-    current_blocks = [{"name": name, "color": COLOR_MAP[name]} for name in st.session_state.player_sequence]
+    # 動態生成玩家操作方塊
+    block_cols = st.columns(st.session_state.difficulty)
     
-    # 利用網頁原生最穩定的 Drag and Drop API 編寫 HTML 組件
-    html_drag_engine = f"""
-    <div id="drag-container" style="display: flex; width: 100%; gap: 16px; justify-content: space-between; padding: 10px 0; overflow: hidden;"></div>
-
-    <script>
-    const blocks = {json.dumps(current_blocks)};
-    const container = document.getElementById('drag-container');
-
-    function syncToStreamlit() {{
-        const order = blocks.map(b => b.name);
-        // 使用 Streamlit 全域變數通訊槽，將最新順序丟給隱藏的 query params 或是中介層
-        window.parent.postMessage({{
-            type: 'streamlit:setComponentValue',
-            value: JSON.stringify(order)
-        }}, '*');
-    }}
-
-    function renderBlocks() {{
-        container.innerHTML = '';
-        blocks.forEach((block, index) => {{
-            const div = document.createElement('div');
-            div.style.flex = '1 1 0%';
-            div.style.minWidth = '0';
-            div.style.aspectRatio = '1 / 1';
-            div.style.borderRadius = '20px';
-            div.style.cursor = 'grab';
-            div.style.border = '1.5px solid rgba(255, 255, 255, 0.5)';
-            div.style.boxShadow = 'inset 0 6px 12px rgba(255,255,255,0.4), 0 8px 20px rgba(0,0,0,0.4)';
-            div.style.background = `linear-gradient(to top, ${{block.color}} 85%, rgba(255,255,255,0.2) 100%)`;
-            div.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-            div.draggable = true;
-            div.dataset.index = index;
-
-            div.addEventListener('dragstart', (e) => {{
-                e.dataTransfer.setData('text/plain', index);
-                div.style.opacity = '0.3';
-            }});
-
-            div.addEventListener('dragend', () => {{
-                div.style.opacity = '1';
-                div.style.transform = 'scale(1)';
-            }});
-
-            div.addEventListener('dragover', (e) => {{
-                e.preventDefault();
-            }});
-
-            div.addEventListener('drop', (e) => {{
-                e.preventDefault();
-                const fromIndex = e.dataTransfer.getData('text/plain');
-                const toIndex = div.dataset.index;
-                
-                if (fromIndex !== toIndex) {{
-                    const movedItem = blocks.splice(fromIndex, 1)[0];
-                    blocks.splice(toIndex, 0, movedItem);
-                    renderBlocks();
-                    syncToStreamlit();
+    for i in range(st.session_state.difficulty):
+        color_name = st.session_state.player_sequence[i]
+        color_code = COLOR_MAP[color_name]
+        
+        # 如果當前方塊正被玩家點擊選中，給予蘋果經典的亮藍色 (#007aff) 呼吸高光，否則為一般白色高光
+        is_selected = (st.session_state.selected_idx == i)
+        border_style = "rgba(255, 255, 255, 0.85)" if not is_selected else "#007aff"
+        shadow_style = "0 0 15px rgba(0, 122, 255, 0.6)" if is_selected else "none"
+        
+        with block_cols[i]:
+            # 用 CSS 實時注入按鈕的漸層色背景與高光樣式（利用按鈕標籤位置精準定位）
+            st.markdown(f'''
+                <style>
+                div[data-testid="stHorizontalBlock"] > div:nth-child({i+1}) button {{
+                    background: linear-gradient(to top, {color_code} 85%, rgba(255,255,255,0.25) 100%) !important;
+                    border-color: {border_style} !important;
+                    box-shadow: {shadow_style}, inset 0 6px 12px rgba(255,255,255,0.3), 0 8px 20px rgba(0,0,0,0.4) !important;
                 }}
-            }});
+                </style>
+            ''', unsafe_allow_html=True)
+            
+            # 方塊按鈕本體（不放任何文字，保持絕對純色與極簡）
+            if st.button("", key=f"color_btn_{i}", use_container_width=True, disabled=st.session_state.game_over):
+                if st.session_state.selected_idx is None:
+                    # 第一次點擊：選中當前方塊
+                    st.session_state.selected_idx = i
+                    st.rerun()
+                else:
+                    # 第二次點擊：如果點的是不同的方塊，直接在後端對調順序
+                    first_idx = st.session_state.selected_idx
+                    if first_idx != i:
+                        st.session_state.player_sequence[first_idx], st.session_state.player_sequence[i] = \
+                            st.session_state.player_sequence[i], st.session_state.player_sequence[first_idx]
+                    
+                    # 對調完成，清空選取狀態
+                    st.session_state.selected_idx = None
+                    st.rerun()
 
-            container.appendChild(div);
-        }});
-        syncToStreamlit();
-    }}
-
-    renderBlocks();
-    </script>
-    """
-    
-    # 渲染純前端拖曳畫布，使用一個唯一的 key 避免跨回合緩存錯誤
-    sync_key = f"ios_pure_canvas_{len(st.session_state.history)}"
-    
-    # 用 query slot 來安全接管傳回值，絕對不閃退、不顯示紅色程式碼字卡！
-    response_json = components.html(html_drag_engine, height=160, scrolling=False, key=sync_key)
-    
-    # 建立一個極致隱形的中介接收器
-    hidden_input = st.text_input("data_slot", value=json.dumps(st.session_state.player_sequence), label_visibility="collapsed")
-    if hidden_input:
-        try:
-            parsed = json.loads(hidden_input)
-            if len(parsed) == st.session_state.difficulty:
-                st.session_state.player_sequence = parsed
-        except:
-            pass
-
+    st.write("")
     st.write("")
     
     # iOS 操作主按鈕列
@@ -283,8 +259,6 @@ with col_main:
     with btn_col1:
         if st.button("確定檢查！", type="primary", use_container_width=True, disabled=st.session_state.game_over):
             current_order = list(st.session_state.player_sequence)
-            
-            # 100% 準確比對
             correct_count = sum(1 for p, s in zip(current_order, st.session_state.secret_sequence) if p == s)
             
             st.session_state.history.append({
