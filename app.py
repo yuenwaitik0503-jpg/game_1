@@ -5,7 +5,7 @@ from streamlit_sortables import sort_items
 # --- 1. 全域 iPhone 玻璃風格核心設定 ---
 st.set_page_config(page_title="iOS 顏色罐子謎題", page_icon="🧪", layout="wide", initial_sidebar_state="collapsed")
 
-# 核心 CSS：用最強力的 CSS 選擇器，把純文字卡片魔改成 iPhone 霓虹毛玻璃罐子
+# 核心 CSS：將第三方元件的突兀字卡「完全隱形化」，只留下我們自訂的 3D 玻璃罐子
 st.markdown("""
     <style>
     /* 仿 iOS 流光壁紙背景 */
@@ -33,7 +33,7 @@ st.markdown("""
         text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
-    /* iPhone 核心玻璃面板 (Glassmorphism) */
+    /* iPhone 核心玻璃面板 */
     .ios-panel {
         background: rgba(255, 255, 255, 0.05) !important;
         backdrop-filter: blur(25px) !important;
@@ -80,43 +80,51 @@ st.markdown("""
         box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 2px 6px rgba(0,0,0,0.3);
     }
 
-    /* 🪄 核心：強力改造第三方拖曳組件，強行注入 3D 磨砂玻璃與 iPhone 膠囊視覺 */
+    /* 🪄 核心魔改：把 `streamlit_sortables` 原本醜陋的預設外殼徹底抹除 */
     ul[data-testid="stSortablesList"] {
         display: flex !important;
-        flex-direction: row !important; /* 強制橫向排列 */
+        flex-direction: row !important; /* 橫向排列 */
         justify-content: space-between !important;
-        gap: 12px !important;
+        gap: 16px !important;
         padding: 15px 0 !important;
+        background: transparent !important;
     }
     
     li[data-testid="stSortablesItem"] {
         flex: 1 1 0% !important;
         min-width: 0 !important;
-        /* 極致磨砂玻璃底色 */
-        background: rgba(255, 255, 255, 0.07) !important;
-        backdrop-filter: blur(20px) !important;
-        -webkit-backdrop-filter: blur(20px) !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 20px !important;
-        padding: 22px 10px !important;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 4px 10px rgba(255,255,255,0.1) !important;
+        
+        /* 🔥 關鍵：將第三方元件內建的背景色、邊框、陰影全部拔除變透明，不干擾視線 */
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        
         cursor: grab !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        text-align: center !important;
-        letter-spacing: -0.3px !important;
-        text-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     
-    /* 當玩家按住拖曳時的 iPhone 物理動態反饋 */
+    /* 當玩家正在拖曳某個罐子時的 iPhone 縮放物理動態反饋 */
     li[data-testid="stSortablesItem"]:active {
         cursor: grabbing !important;
-        transform: scale(0.93) rotate(-1deg) !important;
-        background: rgba(255, 255, 255, 0.15) !important;
-        border-color: #007aff !important; /* Apple 經典藍高光邊框 */
-        box-shadow: 0 15px 45px rgba(0,0,0,0.5) !important;
+        transform: scale(1.08) !important; /* 拖曳時罐子微微放大，極具觸控感 */
+    }
+
+    /* 🎨 自訂 3D 霓虹水晶玻璃罐子本體樣式 */
+    .custom-jar {
+        text-align: center;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        padding: 16px 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        transition: border-color 0.2s ease;
+    }
+    .custom-jar:hover {
+        border-color: rgba(255, 255, 255, 0.3);
     }
 
     /* Apple 膠囊按鈕基底 */
@@ -194,7 +202,7 @@ with st.sidebar:
         
     st.markdown("---")
     st.markdown("### 💡 玩法說明")
-    st.markdown("1. 在 **「玩家操作區」** 直接用滑鼠或手指**左右拖曳卡片**調整順序。\n"
+    st.markdown("1. 在 **「玩家操作區」** 直接用滑鼠或手指**左右拖曳罐子**調整順序。\n"
                 "2. 調整完畢後，點擊下方 **「確定檢查！」** 提交答案。\n"
                 "3. 右側歷史紀錄會即時且完美精準地同步。")
 
@@ -224,22 +232,41 @@ with col_main:
         st.markdown(f'<div class="box-hidden-ios">🔒 箱內藏有 {st.session_state.difficulty} 個顏色的隱藏順序</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 區塊 B：玩家操作區 (100% 穩定、不閃退、純字串拖曳引擎)
+    # 區塊 B：玩家操作區
     st.markdown('<div class="ios-panel">', unsafe_allow_html=True)
     st.subheader("🖐️ 玩家操作區")
     st.caption("按住下方的罐子卡片，直接左右拖曳來調整你心目中的正確順序：")
     st.write("")
     
-    # 建立純字串列表以符合官方組件規範，加上 🧪 增加視覺感
-    raw_string_items = [f"🧪 {name}" for name in st.session_state.player_sequence]
+    # 巧妙設計：雖然組件只收純字串，但 Streamlit 的 Markdown 渲染器非常強大，
+    # 我們可以直接把完整的「3D 霓虹毛玻璃罐子 HTML 代碼」當作字串丟進 `sort_items`！
+    # 這樣組件在渲染時，就會完美呈現出漂亮的罐子，同時完全保留手勢拖曳功能！
+    visual_jar_items = []
+    for name in st.session_state.player_sequence:
+        color_code = COLOR_MAP[name]
+        jar_html_string = f'''
+        <div class="custom-jar">
+            <div style="width: 46%; height: 8px; background: rgba(255,255,255,0.4); border-radius: 4px; margin: 0 auto -2px auto; max-width: 28px;"></div>
+            <div style="width: 80%; height: 85px; border-radius: 16px; box-shadow: inset 0 4px 10px rgba(255,255,255,0.5), 0 8px 20px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.6); background: linear-gradient(to top, {color_code} 85%, rgba(255,255,255,0.15) 100%); margin: 0 auto; max-width: 50px;"></div>
+            <p style="margin-top:8px; font-weight:700; font-size:13px; color:#cbd5e1; margin-bottom:0; text-shadow: 0 2px 4px rgba(0,0,0,0.5); letter-spacing:-0.2px;">{name}</p>
+            <span style="display:none;">[COLOR_ID:{name}]</span>
+        </div>
+        '''
+        visual_jar_items.append(jar_html_string)
     
     # 調用官方專利拖曳排序器 (使用唯一 key 防止回合殘留快取)
     sort_key = f"ios_sortable_engine_{len(st.session_state.history)}"
-    sorted_res = sort_items(raw_string_items, direction="horizontal", key=sort_key)
+    sorted_res = sort_items(visual_jar_items, direction="horizontal", key=sort_key)
     
-    # 【Bug 終結核心點】：將拖曳後的最新純字串，還原並即時存回 Python 狀態中
+    # 【Bug 終結核心點】：從拖曳後的 HTML 字串中，精準解析出玩家最新排列的顏色順序並存回 Python 狀態
     if sorted_res:
-        st.session_state.player_sequence = [item.replace("🧪 ", "") for item in sorted_res]
+        new_order = []
+        for html_item in sorted_res:
+            if "[COLOR_ID:" in html_item:
+                color_name = html_item.split("[COLOR_ID:")[1].split("]")[0]
+                new_order.append(color_name)
+        if len(new_order) == st.session_state.difficulty:
+            st.session_state.player_sequence = new_order
 
     st.write("")
     st.write("")
